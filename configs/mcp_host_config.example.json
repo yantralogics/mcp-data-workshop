@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "sales-data": {
+      "command": "uv",
+      "args": [
+        "run",
+        "--project",
+        "/ABSOLUTE/PATH/TO/mcp-data-workshop",
+        "python",
+        "/ABSOLUTE/PATH/TO/mcp-data-workshop/steps/step_d_prompt.py"
+      ]
+    }
+  }
+}
