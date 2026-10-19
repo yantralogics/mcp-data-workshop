@@ -9,7 +9,7 @@ You'll also understand what's happening on the wire and how to take it further.
 
 | Part | Minutes | What you do |
 |---|---|---|
-| 0. Setup check | before | `uv sync`, run the tests |
+| 0. Setup check | before | Create the venv, install, run the tests |
 | 1. Concepts | 0–20 | Why MCP, the mental model, design principles (slides) |
 | 2. Build | 20–40 | Checkpoints A → D in `server.py` |
 | 3. Connect VS Code | 38–42 | Ask questions in plain English |
@@ -23,15 +23,45 @@ You'll also understand what's happening on the wire and how to take it further.
 
 ## Part 0: Setup check (do this before the session)
 
+You need **Python 3.10 or newer**. Create a virtual environment called `.venv` in the
+repo folder and install the pinned dependencies into it. (The README has the same steps
+with more explanation, including PowerShell troubleshooting.)
+
+**macOS / Linux**
+
 ```bash
 cd mcp-data-workshop
-uv sync
-uv run pytest -q              # 12 passed
-uv run python client_demo.py  # prints tools, a revenue table, a blocked DROP TABLE
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
 ```
 
-All commands below assume you're in the repo folder. Prefix with `uv run` (or activate
-`.venv`) so they use the pinned FastMCP version.
+**Windows (PowerShell)**
+
+```powershell
+cd mcp-data-workshop
+py -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+pip install -r requirements-dev.txt
+```
+
+Then check:
+
+```bash
+python -m pytest -q          # 12 passed
+python client_demo.py        # prints tools, a revenue table, a blocked DROP TABLE
+```
+
+> **Every command in this tutorial assumes two things:** you're in the repo folder, and the
+> venv is **active**: your prompt starts with `(.venv)`. Each new terminal needs
+> activating again (`source .venv/bin/activate`, or `.venv\Scripts\Activate.ps1` on
+> Windows). Seeing `command not found: fastmcp` or `No module named fastmcp`? The venv
+> isn't active.
+>
+> Using [uv](https://docs.astral.sh/uv/) instead? `uv sync` creates the same `.venv`;
+> activate it, or prefix commands with `uv run`.
 
 ---
 
@@ -112,7 +142,7 @@ def greet(name: str) -> str:
 That's a complete MCP server. Now look at it the way a host does:
 
 ```bash
-uv run fastmcp list server.py --input-schema
+fastmcp list server.py --input-schema
 ```
 
 You'll see the tool's name, its description (your docstring) and its input schema,
@@ -125,14 +155,14 @@ generated from `name: str`:
 Call it without any LLM:
 
 ```bash
-uv run fastmcp call server.py greet name=Ada
+fastmcp call server.py greet name=Ada
 # {"result": "Hello, Ada! The sales-data MCP server is up."}
 ```
 
 **Now open the MCP Inspector**, a browser UI that shows the raw protocol:
 
 ```bash
-uv run fastmcp dev inspector server.py
+fastmcp dev inspector server.py
 ```
 
 In the browser: **Connect** → **Tools** → **List Tools** → `greet` → enter a name →
@@ -193,10 +223,10 @@ def table_schema(table: str) -> str:
 Try both:
 
 ```bash
-uv run fastmcp list server.py --resources
-uv run fastmcp call server.py list_tables
-uv run fastmcp call server.py schema://orders
-uv run fastmcp call server.py schema://nope      # helpful error listing real tables
+fastmcp list server.py --resources
+fastmcp call server.py list_tables
+fastmcp call server.py schema://orders
+fastmcp call server.py schema://nope      # helpful error listing real tables
 ```
 
 `list_tables` should report customers 300, products 26, orders 2,500, order_items 4,348.
@@ -266,13 +296,13 @@ def run_query(
 Try the happy path and then attack it:
 
 ```bash
-uv run fastmcp call server.py run_query \
+fastmcp call server.py run_query \
   sql="SELECT region, COUNT(*) AS customers FROM customers GROUP BY region"
 
-uv run fastmcp call server.py run_query sql="DELETE FROM orders"          # blocked by check_sql
-uv run fastmcp call server.py run_query sql="SELECT 1; DROP TABLE orders" # blocked by check_sql
-uv run fastmcp call server.py run_query sql="SELECT nope FROM orders"     # "no such column"
-uv run fastmcp call server.py run_query sql="SELECT * FROM orders" max_rows=5000  # schema rejects
+fastmcp call server.py run_query sql="DELETE FROM orders"          # blocked by check_sql
+fastmcp call server.py run_query sql="SELECT 1; DROP TABLE orders" # blocked by check_sql
+fastmcp call server.py run_query sql="SELECT nope FROM orders"     # "no such column"
+fastmcp call server.py run_query sql="SELECT * FROM orders" max_rows=5000  # schema rejects
 ```
 
 > **What just happened: three layers of defence.**
@@ -317,20 +347,20 @@ Never invent numbers: every figure must come from a query result."""
 ```
 
 ```bash
-uv run fastmcp list server.py --resources --prompts
-uv run fastmcp call server.py analyze_table --prompt table=orders focus=trends
+fastmcp list server.py --resources --prompts
+fastmcp call server.py analyze_table --prompt table=orders focus=trends
 ```
 
 **Same server, different transport.** Run the finished version over HTTP:
 
 ```bash
-uv run python steps/step_d_prompt.py --http         # serves http://127.0.0.1:8000/mcp
+python steps/step_d_prompt.py --http         # serves http://127.0.0.1:8000/mcp
 ```
 
 In a second terminal, use the same client code against the URL:
 
 ```bash
-uv run python client_demo.py http://127.0.0.1:8000/mcp
+python client_demo.py http://127.0.0.1:8000/mcp
 ```
 
 Nothing about your tools changed. Transport is a deployment decision, not a design one.
@@ -345,7 +375,7 @@ Nothing about your tools changed. Transport is a deployment decision, not a desi
 ### Bonus: the client side, with no LLM
 
 ```bash
-uv run python client_demo.py              # or: uv run python client_demo.py server.py
+python client_demo.py              # or: python client_demo.py server.py
 ```
 
 Read `client_demo.py`. It's ~80 lines and does exactly what a host does: list tools,
@@ -384,23 +414,29 @@ fastest way to find out what's wrong when something doesn't connect.
   ls           # should list server.py, steps/, data/, .vscode/ ...
   ```
 
-- **Make sure the environment exists** (safe to run again):
+- **Activate the virtual environment** if your prompt doesn't already start with `(.venv)`:
 
   ```bash
-  uv sync
+  source .venv/bin/activate        # macOS/Linux
+  .venv\Scripts\Activate.ps1        # Windows PowerShell
   ```
+
+  Tip: run **Python: Select Interpreter** from the Command Palette and choose the
+  `.venv` interpreter. VS Code then activates it automatically in every new terminal.
 
 - **Split the terminal** with the split icon in the terminal toolbar. Keep one pane for
   long-running servers and one for commands. <kbd>Ctrl</kbd>+<kbd>C</kbd> stops a running server.
 
 ### 3.2 Test the exact command VS Code will run
 
-VS Code will start your server with `uv run ... python steps/step_d_prompt.py`. Run the
+VS Code will start your server by running the venv's own Python on the step file:
+`.venv/bin/python steps/step_d_prompt.py`. Using that interpreter directly means the
+server finds its packages even though VS Code never "activates" anything. Run the
 equivalent yourself first. If it fails here, it will fail in VS Code too, and the terminal
 shows the real error much more clearly.
 
 ```bash
-uv run --project . fastmcp list steps/step_d_prompt.py
+fastmcp list steps/step_d_prompt.py
 ```
 
 Expected: `Tools (2)` listing `list_tables` and `run_query`.
@@ -408,19 +444,16 @@ Expected: `Tools (2)` listing `list_tables` and `run_query`.
 Now try starting it bare, the way a host does:
 
 ```bash
-uv run python steps/step_d_prompt.py
+.venv/bin/python steps/step_d_prompt.py           # macOS/Linux
+.venv\Scripts\python.exe steps\step_d_prompt.py   # Windows
 ```
 
 It appears to **hang**. That's correct: a stdio server sits waiting for JSON-RPC
 messages on stdin. Press <kbd>Ctrl</kbd>+<kbd>C</kbd>. (This is also why a stray `print()`
 breaks stdio servers: stdout *is* the message channel.)
 
-Finally, note where `uv` lives. You'll need this if VS Code can't find it:
-
-```bash
-which uv        # macOS/Linux, e.g. /Users/you/.local/bin/uv
-where.exe uv    # Windows PowerShell
-```
+If you get `No such file or directory` instead, the venv doesn't exist yet, or it's
+named something other than `.venv`. Go back to Part 0.
 
 ### 3.3 Add the server to VS Code
 
@@ -435,11 +468,8 @@ code .vscode/mcp.json
   "servers": {
     "sales-data": {
       "type": "stdio",
-      "command": "uv",
-      "args": [
-        "run", "--project", "${workspaceFolder}",
-        "python", "${workspaceFolder}/steps/step_d_prompt.py"
-      ]
+      "command": "${workspaceFolder}/.venv/bin/python",
+      "args": ["${workspaceFolder}/steps/step_d_prompt.py"]
     }
   }
 }
@@ -452,8 +482,15 @@ What each part does:
 | `"servers"` | VS Code's top-level key. (Claude-style configs on the web use `"mcpServers"`. Don't mix them up when copying examples.) |
 | `"sales-data"` | The server's name. It appears in the tools list and in prompt names. |
 | `"type": "stdio"` | VS Code launches the server as a subprocess. |
-| `"command"` / `"args"` | Exactly the command you tested in 3.2. |
+| `"command"` | The venv's Python. Pointing at it directly is what makes the installed packages available. |
+| `"args"` | The server file to run: exactly the command you tested in 3.2. |
 | `${workspaceFolder}` | Filled in by VS Code with the repo's path, so no absolute paths are needed. |
+
+**On Windows**, the venv's Python lives in a different place. Change the `"command"` line to:
+
+```json
+"command": "${workspaceFolder}\\.venv\\Scripts\\python.exe",
+```
 
 If `code` isn't recognised on macOS, open the Command Palette (<kbd>⇧⌘P</kbd>), run
 **Shell Command: Install 'code' command in PATH**, then open a new terminal. On Windows,
@@ -469,7 +506,7 @@ the installer adds it by default.
 
   ```bash
   REPO="$(pwd)"
-  code --add-mcp "{\"name\":\"sales-data\",\"command\":\"uv\",\"args\":[\"run\",\"--project\",\"$REPO\",\"python\",\"$REPO/steps/step_d_prompt.py\"]}"
+  code --add-mcp "{\"name\":\"sales-data\",\"command\":\"$REPO/.venv/bin/python\",\"args\":[\"$REPO/steps/step_d_prompt.py\"]}"
   ```
 
   On Windows, stick with the workspace file. Quoting JSON in PowerShell is error-prone.
@@ -529,7 +566,7 @@ To try **your own** `server.py` instead of the finished one, change the last arg
 In one terminal pane, start the server as a web service and leave it running:
 
 ```bash
-uv run python steps/step_d_prompt.py --http
+python steps/step_d_prompt.py --http
 ```
 
 Add a second entry inside `"servers"` in `.vscode/mcp.json`, then start it from
@@ -547,7 +584,7 @@ Ask Copilot a question and watch the terminal: every tool call shows up as a
 `POST /mcp` line. Same tools, different transport.
 
 **Not showing up?** See Troubleshooting below. The usual causes are opening the wrong
-folder, VS Code not finding `uv`, or the server needing a restart.
+folder, a missing or inactive venv, or the server needing a restart.
 
 ---
 
@@ -589,11 +626,14 @@ folder, VS Code not finding `uv`, or the server needing a restart.
 | VS Code shows no tools, or the server errors | Run **MCP: List Servers** → **sales-data** → **Show Output** to see the real error. Check that you opened the `mcp-data-workshop` folder itself, since `${workspaceFolder}` depends on it. |
 | `unable to open database file` | `DB_PATH` is wrong for where the file lives. Check `.parent` vs `.parent.parent`. |
 | Server connects then errors mysteriously | A `print()` to stdout is corrupting the stdio stream. Log to stderr. |
-| `spawn uv ENOENT` or `uv` not found | VS Code can't see your shell PATH. Put the full path from `which uv` (or `where.exe uv`) in `"command"`. |
+| `spawn ... .venv/bin/python ENOENT` | The venv is missing or named differently. Create it as `.venv` in the repo (Part 0). On Windows, use the `.venv\Scripts\python.exe` path from 3.3. |
+| `No module named fastmcp` / `fastmcp: command not found` | The venv isn't active in this terminal. Activate it (Part 0), or run **Python: Select Interpreter** → `.venv`. |
+| `pip` says the package requires a different Python | Your Python is older than 3.10. Install a newer one and recreate the venv. |
+| PowerShell: "running scripts is disabled" | Run `Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned` once, then activate again. |
 | Inspector won't start | Needs Node.js 18+ (`node --version`). |
 | Tool changes not visible | VS Code caches the tool list. **MCP: List Servers** → **sales-data** → **Restart**. |
 | No Agent mode or Tools button in Chat | The GitHub Copilot Chat extension isn't installed or you're not signed in. |
 | Tools appear twice | The server is configured twice (workspace and user, or stdio and HTTP). Remove or stop one. |
 | Model ignores your tool | Improve the name and docstring: say *when* to use it. |
 | `Address already in use` on `--http` | Another server is on port 8000. Stop it, or change the port. |
-| Want a fresh database | `uv run python data/build_db.py` (deterministic, same data every time). |
+| Want a fresh database | `python data/build_db.py` (deterministic, same data every time). |
