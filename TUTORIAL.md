@@ -12,7 +12,7 @@ You'll also understand what's happening on the wire and how to take it further.
 | 0. Setup check | before | `uv sync`, run the tests |
 | 1. Concepts | 0–20 | Why MCP, the mental model, design principles (slides) |
 | 2. Build | 20–40 | Checkpoints A → D in `server.py` |
-| 3. Connect a host | 38–42 | Ask questions in plain English |
+| 3. Connect VS Code | 38–42 | Ask questions in plain English |
 | 4. Wrap-up | 40–45 | Recap and stretch challenges |
 
 > **Fell behind?** Every checkpoint has a complete, working file in `steps/`. Copy it
@@ -355,41 +355,156 @@ handle an error, render a prompt. Hosts add an LLM in the middle that chooses
 
 ---
 
-## Part 3: Connect a real host (≈4 min)
+## Part 3: Connect VS Code (≈4 min)
 
-Use the finished server so everyone has the same tools. You need **absolute paths**.
-Run `pwd` in the repo folder and substitute it for `/ABS/PATH` below.
+Now plug the finished server into a real host. Here the host is **VS Code**:
+GitHub Copilot Chat (in Agent mode) is the LLM, VS Code runs the MCP client, and your
+server doesn't change at all.
 
-**Claude Code**
+**You need:**
+
+- VS Code with the GitHub Copilot Chat extension, signed in.
+- The repo opened **as the workspace folder**: *File → Open Folder…* and pick
+  `mcp-data-workshop` itself, not its parent. The config below relies on that.
+
+We use the finished server (`steps/step_d_prompt.py`) so everyone has identical tools.
+
+### 3.1 Get comfortable with the integrated terminal
+
+Everything in this part can be checked from VS Code's built-in terminal, which is the
+fastest way to find out what's wrong when something doesn't connect.
+
+- **Open it:** *View → Terminal*, or press <kbd>Ctrl</kbd>+<kbd>`</kbd> (backtick; same
+  keys on macOS). It opens in the workspace folder.
+- **Check where you are and that the files are there:**
+
+  ```bash
+  pwd          # macOS/Linux: should end in /mcp-data-workshop
+               # Windows PowerShell: use  Get-Location
+  ls           # should list server.py, steps/, data/, .vscode/ ...
+  ```
+
+- **Make sure the environment exists** (safe to run again):
+
+  ```bash
+  uv sync
+  ```
+
+- **Split the terminal** with the split icon in the terminal toolbar. Keep one pane for
+  long-running servers and one for commands. <kbd>Ctrl</kbd>+<kbd>C</kbd> stops a running server.
+
+### 3.2 Test the exact command VS Code will run
+
+VS Code will start your server with `uv run ... python steps/step_d_prompt.py`. Run the
+equivalent yourself first. If it fails here, it will fail in VS Code too, and the terminal
+shows the real error much more clearly.
 
 ```bash
-claude mcp add sales-data -- uv run --project /ABS/PATH python /ABS/PATH/steps/step_d_prompt.py
+uv run --project . fastmcp list steps/step_d_prompt.py
 ```
 
-**Claude Desktop, Cursor, or other JSON-configured hosts.** Add this to the host's MCP
-config (Claude Desktop: Settings → Developer → Edit Config), then restart the host:
+Expected: `Tools (2)` listing `list_tables` and `run_query`.
+
+Now try starting it bare, the way a host does:
+
+```bash
+uv run python steps/step_d_prompt.py
+```
+
+It appears to **hang**. That's correct: a stdio server sits waiting for JSON-RPC
+messages on stdin. Press <kbd>Ctrl</kbd>+<kbd>C</kbd>. (This is also why a stray `print()`
+breaks stdio servers: stdout *is* the message channel.)
+
+Finally, note where `uv` lives. You'll need this if VS Code can't find it:
+
+```bash
+which uv        # macOS/Linux, e.g. /Users/you/.local/bin/uv
+where.exe uv    # Windows PowerShell
+```
+
+### 3.3 Add the server to VS Code
+
+The repo already contains **`.vscode/mcp.json`**. Open it from the terminal:
+
+```bash
+code .vscode/mcp.json
+```
 
 ```json
 {
-  "mcpServers": {
+  "servers": {
     "sales-data": {
+      "type": "stdio",
       "command": "uv",
-      "args": ["run", "--project", "/ABS/PATH", "python", "/ABS/PATH/steps/step_d_prompt.py"]
+      "args": [
+        "run", "--project", "${workspaceFolder}",
+        "python", "${workspaceFolder}/steps/step_d_prompt.py"
+      ]
     }
   }
 }
 ```
 
-(A copy is in `configs/mcp_host_config.example.json`. FastMCP can also write it for you:
-`uv run fastmcp install claude-desktop steps/step_d_prompt.py`. Run
-`uv run fastmcp install --help` for other hosts.)
+What each part does:
 
-**VS Code** uses `.vscode/mcp.json` with a top-level `"servers"` key instead of
-`"mcpServers"`, otherwise the same.
+| Field | Meaning |
+|---|---|
+| `"servers"` | VS Code's top-level key. (Claude-style configs on the web use `"mcpServers"`. Don't mix them up when copying examples.) |
+| `"sales-data"` | The server's name. It appears in the tools list and in prompt names. |
+| `"type": "stdio"` | VS Code launches the server as a subprocess. |
+| `"command"` / `"args"` | Exactly the command you tested in 3.2. |
+| `${workspaceFolder}` | Filled in by VS Code with the repo's path, so no absolute paths are needed. |
 
-### Ask it things
+If `code` isn't recognised on macOS, open the Command Palette (<kbd>⇧⌘P</kbd>), run
+**Shell Command: Install 'code' command in PATH**, then open a new terminal. On Windows,
+the installer adds it by default.
 
-Watch which tools it calls and what SQL it writes. Approve calls when prompted.
+**Other ways to add a server** (pick only one, or the tools will appear twice):
+
+- **Command Palette:** run **MCP: Add Server**, choose a stdio command, follow the prompts,
+  and pick *Workspace* to write `.vscode/mcp.json`.
+- **Terminal, for your user profile (all workspaces):** `code --add-mcp` takes the server
+  as JSON. A user-level server has no workspace, so use absolute paths. On macOS/Linux,
+  from the repo folder:
+
+  ```bash
+  REPO="$(pwd)"
+  code --add-mcp "{\"name\":\"sales-data\",\"command\":\"uv\",\"args\":[\"run\",\"--project\",\"$REPO\",\"python\",\"$REPO/steps/step_d_prompt.py\"]}"
+  ```
+
+  On Windows, stick with the workspace file. Quoting JSON in PowerShell is error-prone.
+
+### 3.4 Start the server and check it's running
+
+1. Open the Command Palette (<kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>P</kbd> /
+   <kbd>⇧⌘P</kbd>) and run **MCP: List Servers**.
+2. Select **sales-data** and choose **Start**. The first time, VS Code may ask whether you
+   trust the server. It's your code, so accept.
+3. Run **MCP: List Servers** → **sales-data** → **Show Output**. This is the server's log
+   (its stderr). Look for:
+
+   ```
+   Starting MCP server 'sales-data' with transport 'stdio'
+   ```
+
+   Keep this panel handy. Python tracebacks, database errors and `ToolError`s all land here.
+
+### 3.5 Use it from Copilot Chat
+
+1. Open the **Chat** view and switch the mode dropdown to **Agent**.
+2. Click the **Tools** button (the tool icon in the chat input). You should see
+   **sales-data** with `list_tables` and `run_query`. Leave them ticked.
+3. Ask a question (see the list below). Before each call, VS Code shows the tool name and
+   its arguments, including the exact SQL. You can **edit the arguments** before allowing it.
+   The **Continue** dropdown can auto-approve a tool for the session. Approve one at a
+   time today so you can watch what the model does.
+4. **Use the prompt:** type `/mcp.sales-data.analyze_table` in the chat box, then fill in
+   `table` (e.g. `customers`) and `focus` when asked.
+5. **Attach a resource:** click **Add Context** → **MCP Resources** →
+   `schema://{table}`, and enter `orders`. The schema is now in the conversation as
+   context: the *application* loaded it, not the model.
+
+**Ask it things:**
 
 - *"What tables do you have access to, and what's in them?"*
 - *"Which region brought in the most net revenue?"* → Northeast, about $302k
@@ -397,13 +512,42 @@ Watch which tools it calls and what SQL it writes. Approve calls when prompted.
 - *"What was our best month?"* → December 2025, about $100k
 - *"Compare Q2 2026 to Q1 2026."* → net revenue up ~70% ($190k vs $111k)
 - *"Try to delete the orders table."* → watch your guardrails respond
-- Use the **analyze_table** prompt from the host's prompt/slash menu on `customers`.
 
 If the model reports a number, ask it *"show me the SQL"*. Every figure should be traceable
 to a query. That habit matters more than any single feature.
 
-**Not showing up?** See Troubleshooting below. Most problems are relative paths or
-the host needing a full restart.
+### 3.6 Edit, restart, repeat
+
+VS Code caches the tool list. After you change server code, restart the server:
+**MCP: List Servers** → **sales-data** → **Restart**.
+
+To try **your own** `server.py` instead of the finished one, change the last argument in
+`.vscode/mcp.json` to `"${workspaceFolder}/server.py"`, save, and restart.
+
+### Optional: connect over HTTP and watch the traffic
+
+In one terminal pane, start the server as a web service and leave it running:
+
+```bash
+uv run python steps/step_d_prompt.py --http
+```
+
+Add a second entry inside `"servers"` in `.vscode/mcp.json`, then start it from
+**MCP: List Servers**:
+
+```json
+"sales-data-http": {
+  "type": "http",
+  "url": "http://127.0.0.1:8000/mcp"
+}
+```
+
+Stop or untick the stdio `sales-data` server first so the tools aren't listed twice.
+Ask Copilot a question and watch the terminal: every tool call shows up as a
+`POST /mcp` line. Same tools, different transport.
+
+**Not showing up?** See Troubleshooting below. The usual causes are opening the wrong
+folder, VS Code not finding `uv`, or the server needing a restart.
 
 ---
 
@@ -442,12 +586,14 @@ the host needing a full restart.
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Host shows no tools / server "failed" | Use **absolute** paths in the config. Fully quit and restart the host. |
+| VS Code shows no tools, or the server errors | Run **MCP: List Servers** → **sales-data** → **Show Output** to see the real error. Check that you opened the `mcp-data-workshop` folder itself, since `${workspaceFolder}` depends on it. |
 | `unable to open database file` | `DB_PATH` is wrong for where the file lives. Check `.parent` vs `.parent.parent`. |
 | Server connects then errors mysteriously | A `print()` to stdout is corrupting the stdio stream. Log to stderr. |
-| `uv: command not found` inside the host | The host can't see your shell PATH. Use the full path to `uv` (`which uv`). |
+| `spawn uv ENOENT` or `uv` not found | VS Code can't see your shell PATH. Put the full path from `which uv` (or `where.exe uv`) in `"command"`. |
 | Inspector won't start | Needs Node.js 18+ (`node --version`). |
-| Tool changes not visible | Hosts cache the tool list. Restart the host, or reconnect in the Inspector. |
+| Tool changes not visible | VS Code caches the tool list. **MCP: List Servers** → **sales-data** → **Restart**. |
+| No Agent mode or Tools button in Chat | The GitHub Copilot Chat extension isn't installed or you're not signed in. |
+| Tools appear twice | The server is configured twice (workspace and user, or stdio and HTTP). Remove or stop one. |
 | Model ignores your tool | Improve the name and docstring: say *when* to use it. |
 | `Address already in use` on `--http` | Another server is on port 8000. Stop it, or change the port. |
 | Want a fresh database | `uv run python data/build_db.py` (deterministic, same data every time). |
